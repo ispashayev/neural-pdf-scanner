@@ -1,0 +1,43 @@
+Source for notes: http://wwwimages.adobe.com/content/dam/Adobe/en/devnet/pdf/pdfs/PDF32000_2008.pdf
+Copyright Adobe Systems Incorporated 2008
+Intended solely for personal reference
+
+-------------------------------------------
+Notes on the Structure of the Moody's PDFs:
+-------------------------------------------
+
+The images are stored as stream objects, i.e. a sequence of bytes.
+Stream objects may be of unlimited length.
+The context in which a stream is referenced determines what the sequence of bytes represent.
+
+A stream shall consist of a dictionary followed by zero or more bytes bracketed between the keywords
+"stream" (followed by newline) and "endstream":
+dictionary
+stream
+...Zero or more bytes...
+endstream
+
+All streams are indirect objects (see 7.3.10) and the stream dictionary is a direct object
+The stream keyword is followed by CARRIAGE RETURN and LINE FEED or just a LINE FEED
+The stream dictionary specifies the exact number of bytes of data in the stream
+There is an end-of-line marker after the data and before the endstream keyword (not included in steam length)
+Most filters are defined so that the data is self-limiting, i.e. they use an encoding scheme in which an
+explicit end of data (EOD) marker delimits the extent of the data.
+
+Entries common to all stream dictionaries:
+KEY	       | TYPE			| VALUE
+------------------------------------------------------------------------------------------------------------------------------
+Length	       | integer		| (Required) Number of bytes from beginning of line following the keyword stream
+	       | 			| to the last byte just before the keyword endstream
+Filter	       | name or array		| The name of a filter applied in processing the stream data, or an array of zero,
+	       |      	 		| one, or several names. Multiple filters are applied in the order they are specified
+DecodeParams   | dictionary or array	| A parameter dictionary or an array of such dictionaries, used by the filters
+	       | 	       		| specified in Filter
+F	       | file specification	| The file containing the stream data (ignores bytes inbetween keywords)
+FFilter	       | name or array		| Filter for stream's external file
+FDecodeParams  | dictionary or array	| DecodeParams for stream's external file
+DL	       | integer       		| A non-negative integer representing the number of bytes in the decoded (defiltered)
+	       | 			| stream. Can be used to determine, for example, whether enough disk space is available
+	       | 			| to write a stream to a file
+
+
