@@ -14,8 +14,9 @@ Returns a 3-tuple of numpy matrix objects
 '''
 def integrate_img(permno, name):
 
-    img = Image.open(name + '.jpeg', 'r')
+    img = Image.open(name + '.jpeg', 'r')#.convert('L')
     w, h = img.size # width, height
+    print w, h
     pixels = list(img.getdata())
     red, green, blue = zip(*pixels)
     red = np.matrix([ red[i*w:i*w+w] for i in range(h) ])
