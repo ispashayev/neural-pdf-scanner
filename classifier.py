@@ -1,48 +1,96 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+from utils import Data, Layers
+
 '''
-N = number of points per class
-D = dimensionality of data
-K = number of classes
+Parent class for different types of classifiers.
+Subclasses implement train() and evaluate() methods.
 '''
-class Data(object):
-    def __init__(self, N=100, D=2, K=3):
-        self.N = N
-        self.D = D
-        self.K = K
-    def getDim(self):
-        return self.D
-    def getNumClasses(self):
-        return self.K
-    '''
-    # Need to implement this
-    def preprocess(self):
-        pass
-    '''
-    def construct_toy_data(self):
-        self.X = np.zeros((self.N*self.K, self.D)) # data matrix (each row = single example)
-        self.y = np.zeros(self.N*self.K, dtype='uint8') # class labels
-        for j in xrange(self.K):
-            ix =  range(self.N*j, self.N*(j+1))
-            r = np.linspace(0.0, 1, self.N) # radius
-            t = np.linspace(j*4, (j+1)*4, self.N) + np.random.randn(self.N)*0.2 # theta
-            self.X[ix] = np.c_[r*np.sin(t), r*np.cos(t)]
-            self.y[ix] = j
-    
 class Classifier(object):
     def __init__(self, data):
-        self.data = data
+        ''' Data '''
+        self.X = data.X
+        self.y = data.y
+        self.N = data.N
+        self.num_examples = self.X.shape[0]
         ''' Hyperparameters '''
         self.step_size = 1e-0
-        self.reg = 1e-3
-        
+        self.reg = 1e-3 # regularization strength
+
+class NeuralNetwork(Classifier):
     '''
-    We implement the following methods in the subclasses of Classifier
-    train()
-    evaluate()
+    We use a layers object to get the number of neurons per layer
     '''
+    def __init__(self, data, layers):
+        super(NeuralNetwork, self).__init__(data)
+        ''' Parameters '''
+        self.layers = [self.X] # input layer
+        self.num_layers = layers.num_layers
+        self.W_list, self.b_list = [], []
+        for i in xrange(self.num_layers):
+            self.W_list.append(0.01 * np.random.randn(layers.layers[i][0], layers.layers[i][1]))
+            self.b_list.append(np.zeros((1, layers.layers[i][1])))
     
+    def train(self):
+        assert len(self.W_list) == len(self.b_list) # simple sanity check
+        '''
+        Forward pass: Evaluate class scores, e.g. W_2 * max(0,W_1*X+b), where
+        max is an elementwise operation and
+        0 is an [N x K] matrix of zeros.
+        '''
+        for iteration in xrange(10000):
+            for i in xrange(self.num_layers-1):
+                W_i, b_i, inp_i = self.W_list[i], self.b_list[i], self.layers[i]
+                self.layers.append(np.maximum(0, np.dot(inp_i, W_i) + b_i)) # ReLU activation
+            self.scores = np.dot(self.layers[-1], self.W_list[-1]) + self.b_list[-1] # output layer
+                
+            # Compute the loss: average cross-entropy and regularization
+            ''' Can probably move this part into parent class '''
+            exp_scores = np.exp(self.scores)
+            probs = exp_scores / np.sum(exp_scores, axis=1, keepdims=True) # [N x K]
+            correct_logprobs = -np.log(probs[range(self.num_examples),self.y])
+            data_loss = np.sum(correct_logprobs) / self.num_examples
+            reg_loss = sum([0.5*self.reg*np.sum(W*W) for W in self.W_list])
+            loss = data_loss + reg_loss
+            if iteration % 1000 == 0: print "iteration %d: loss %f" % (iteration, loss)
+                
+            # Compute derivative of loss wrt scores
+            dscores = probs
+            dscores[range(self.num_examples),self.y] -= 1
+            dscores /= self.num_examples
+            
+            # Backpropagate dscores to dparameters
+            dW_list, db_list, dlayers =  [], [], [dscores]
+            for i in xrange(self.num_layers-1,0,-1): # !!!!! CHECK # OF ITERATIONS HERE !!!!!
+                W_i, b_i, inp_i = self.W_list[i], self.b_list[i], self.layers[i]
+                dW_i = np.dot(inp_i.T, dlayers[0])
+                db_i = np.sum(dlayers[0], axis=0, keepdims=True)
+                dinp_i = np.dot(dlayers[0], W_i.T)
+                dinp_i[inp_i <= 0] = 0
+                dlayers.insert(0, dinp_i)
+                dW_list.insert(0, dW_i)
+                db_list.insert(0, db_i)
+            dW = np.dot(self.X.T, dlayers[0])
+            db = np.sum(dlayers[0], axis=0, keepdims=True)
+            dW_list.insert(0, dW)
+            db_list.insert(0, db)
+                    
+            for i in xrange(self.num_layers):
+                dW_list[i] += self.reg*self.W_list[i] # Add regularization gradient distribution
+                self.W_list[i] += -self.step_size * dW_list[i]
+                self.b_list[i] += -self.step_size * db_list[i]
+
+            
+    def evaluate(self):
+        inp = self.X
+        for i in xrange(self.num_layers-1):
+            inp = np.maximum(0, np.dot(inp, self.W_list[i]) + self.b_list[i])
+        scores = np.dot(inp, self.W_list[-1]) + self.b_list[-1]
+        predicted_class = np.argmax(scores, axis=1)
+        return 'training accuracy: %.2f' % (np.mean(predicted_class == self.y))
+
+
 class Softmax(Classifier):
     def __init__(self, data):
         super(Softmax, self).__init__(data)
@@ -51,80 +99,37 @@ class Softmax(Classifier):
         self.b = np.zeros((1, data.getNumClasses()))
     
     def train(self):
-        X, y = self.data.X, self.data.y
-        num_examples = X.shape[0]
         for i in xrange(200):
             # Compute the class scores for a linear classifier
-            self.scores = np.dot(X, self.W) + self.b
+            self.scores = np.dot(self.X, self.W) + self.b
 
             # Compute the loss: average cross-entropy loss and regularization
             exp_scores = np.exp(self.scores) # unnormalized probabilities
             probs = exp_scores / np.sum(exp_scores, axis=1, keepdims=True) # normalized
-            correct_logprobs = -np.log(probs[range(num_examples),y])
-            data_loss = np.sum(correct_logprobs) / num_examples
+            correct_logprobs = -np.log(probs[range(self.num_examples),self.y])
+            data_loss = np.sum(correct_logprobs) / self.num_examples
             reg_loss = 0.5*self.reg*np.sum(self.W*self.W)
             loss = data_loss + reg_loss
-            if i % 10 == 0:
-                print "iteration %d: loss %f" % (i, loss)
+            if i % 10 == 0: print "iteration %d: loss %f" % (i, loss)
 
             # Computing the Analytic Gradient with Backpropagation
             dscores = probs
-            dscores[range(num_examples), y] -= 1
-            dscores /= num_examples
-            dW = np.dot(X.T, dscores)
+            dscores[range(self.num_examples), self.y] -= 1
+            dscores /= self.num_examples
+            dW = np.dot(self.X.T, dscores)
             db = np.sum(dscores, axis=0, keepdims=True)
             dW += self.reg*self.W
 
             # Performing a parameter update
             self.W += -self.step_size * dW
             self.b += -self.step_size * db
-            
 
     def evaluate(self):
-        scores = np.dot(self.data.X, self.W) + self.b
+        scores = np.dot(self.X, self.W) + self.b
         predicted_class = np.argmax(self.scores, axis=1)
         result_str = 'training accuracy: %.2f' % np.mean(predicted_class == y)
         return result_str
 
-class Layers(object):
-    def __init__(self, D, K):
-        self.K = K
-        self.num_layers = 1
-        self.layers = [(D,K)]
-    def add_layer(self, num_neurons):
-        self.layers[-1:] = [(self.layers[-1][0], num_neurons),(num_neurons,self.K)]
-        self.num_layers += 1
-    
-class NeuralNetwork(Classifier):
-    def __init__(self, data, layers):
-        super(NeuralNetwork, self).__init__(data)
-        ''' Parameters '''
-        self.W_list, self.b_list, self.hidden = [], [], []
-        for i in xrange(layers.num_layers):
-            self.W_list.append(0.01 * np.random.randn(layers[i])) # problem with unpacking tuple here maybe
-            self.b_list.append(np.zeros((1, layers[i][1])))
-    
-    def train(self):
-        X, y = self.data.X, self.data.y
-        # Evaluate class scores (forward pass)
-        for i in xrange(layers.num_layers-1):
-            ''' NOTE: fix the following crime against humanity '''
-            self.hidden.append(np.maximum(0, np.dot(X, self.W_list[i]) + self.b_list[i])) # (Stacking) ReLU activation
-        self.scores = np.dot(self.hidden[-1], self.W_list[-1]) + self.b_list[-1]
-
-        # Compute the loss: average cross-entropy and regularization
-        ''' Can probably move this part into parent class '''
-        exp_scores = np.exp(self.scores)
-        probs = exp_scores / np.sum(exp_scores, axis=1, keepdims=True)
-        correct_logprobs = -np.log(probs[range(num_examples),y])
-        data_loss = np.sum(correct_logprobs)/num_examples
-
-        ''' PAUSED HERE '''
-        reg_loss = 0.5*self.reg*np.sum(
-        
-        
-    def evaluate(self):
-        pass
 
 def classifyWithSoftmax(data):
     # Training a Softmax Classifier to classify the data
@@ -134,21 +139,24 @@ def classifyWithSoftmax(data):
     print accuracy
 
 def classifyWithNeuralNetwork(data):
-    layers = Layers(data.getDim(), data.getNumClasses())
+    # Training a Neural Network to classify the data
+    layers = Layers(data.D, data.K)
     layers.add_layer(100)
     neural_network = NeuralNetwork(data, layers)
+    neural_network.train()
+    accuracy = neural_network.evaluate()
+    print accuracy
     
 if __name__ == '__main__':
     toy_2d_data = Data()
     toy_2d_data.construct_toy_data()
-    X, y = toy_2d_data.X, toy_2d_data.y
-
-    # data.preprocess()
+    toy_2d_data.preprocess()
     '''
     # Visualizing the data
+    X, y = toy_2d_data.X, toy_2d_data.y
     plt.scatter(X[:, 0], X[:, 1], c=y, s=40, cmap=plt.cm.Spectral)
     plt.show()
     '''
 
-    #classifyWithSoftmax(toy_2d_data)
+    # classifyWithSoftmax(toy_2d_data)
     classifyWithNeuralNetwork(toy_2d_data)
