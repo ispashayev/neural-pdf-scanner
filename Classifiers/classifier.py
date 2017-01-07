@@ -1,3 +1,9 @@
+'''
+Author: Iskandar Pashayev
+
+Resources (partial code + theory) used from cs231n.github.io by Andrej Karpathy
+'''
+
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -25,7 +31,7 @@ class NeuralNetwork(Classifier):
     def __init__(self, data, layers):
         super(NeuralNetwork, self).__init__(data)
         ''' Parameters '''
-        self.layers = [self.X] # input layer
+        # self.layers = [self.X] # input layer
         self.num_layers = layers.num_layers
         self.W_list, self.b_list = [], []
         for i in xrange(self.num_layers):
@@ -40,14 +46,15 @@ class NeuralNetwork(Classifier):
         0 is an [N x K] matrix of zeros.
         '''
         for iteration in xrange(10000):
+            layers = [self.X] # input layer
             for i in xrange(self.num_layers-1):
-                W_i, b_i, inp_i = self.W_list[i], self.b_list[i], self.layers[i]
-                self.layers.append(np.maximum(0, np.dot(inp_i, W_i) + b_i)) # ReLU activation
-            self.scores = np.dot(self.layers[-1], self.W_list[-1]) + self.b_list[-1] # output layer
+                W_i, b_i, layer_i = self.W_list[i], self.b_list[i], layers[i]
+                layers.append(np.maximum(0, np.dot(layer_i, W_i) + b_i)) # ReLU activation
+            scores = np.dot(layers[-1], self.W_list[-1]) + self.b_list[-1] # output layer
                 
             # Compute the loss: average cross-entropy and regularization
             ''' Can probably move this part into parent class '''
-            exp_scores = np.exp(self.scores)
+            exp_scores = np.exp(scores)
             probs = exp_scores / np.sum(exp_scores, axis=1, keepdims=True) # [N x K]
             correct_logprobs = -np.log(probs[range(self.num_examples),self.y])
             data_loss = np.sum(correct_logprobs) / self.num_examples
@@ -61,26 +68,38 @@ class NeuralNetwork(Classifier):
             dscores /= self.num_examples
             
             # Backpropagate dscores to dparameters
-            dW_list, db_list, dlayers =  [], [], [dscores]
-            for i in xrange(self.num_layers-1,0,-1): # !!!!! CHECK # OF ITERATIONS HERE !!!!!
-                W_i, b_i, inp_i = self.W_list[i], self.b_list[i], self.layers[i]
-                dW_i = np.dot(inp_i.T, dlayers[0])
-                db_i = np.sum(dlayers[0], axis=0, keepdims=True)
-                dinp_i = np.dot(dlayers[0], W_i.T)
-                dinp_i[inp_i <= 0] = 0
-                dlayers.insert(0, dinp_i)
+            dW_list, db_list, dhiddens = [], [], []
+            for i in xrange(self.num_layers-1,0,-1):
+                W_i, b_i, hidden_i = self.W_list[i], self.b_list[i], layers[i]
+                
+                '''
+                Finding the gradients of the terms of W_i*max(0,hidden_i) + b_i in
+                the loss function. (i.e. wrt W_i, b_i, and hidden_i
+
+                Note: this code hasn't been tested with 3 layer networks (yet)
+                '''
+                try:
+                    dlayer = dhiddens[0]
+                except:
+                    dlayer = dscores
+                dW_i = np.dot(hidden_i.T, dlayer) # gradient of loss wrt W_i
+                db_i = np.sum(dlayer, axis=0, keepdims=True) # gradient of loss wrt b_i
+                dhidden = np.dot(dlayer, W_i.T) # gradient of loss wrt hidden layer
+                dhidden[hidden_i <= 0] = 0 # backprop the ReLU non-linearity
+                
+                dhiddens.insert(0, dhidden) # insertions might be fucked up
                 dW_list.insert(0, dW_i)
                 db_list.insert(0, db_i)
-            dW = np.dot(self.X.T, dlayers[0])
-            db = np.sum(dlayers[0], axis=0, keepdims=True)
-            dW_list.insert(0, dW)
-            db_list.insert(0, db)
+                
+            dW_0 = np.dot(self.X.T, dhiddens[0]) # self.X.T should be equal to layers[0]
+            db_0 = np.sum(dhiddens[0], axis=0, keepdims=True)
+            dW_list.insert(0, dW_0)
+            db_list.insert(0, db_0)
                     
             for i in xrange(self.num_layers):
                 dW_list[i] += self.reg*self.W_list[i] # Add regularization gradient distribution
                 self.W_list[i] += -self.step_size * dW_list[i]
                 self.b_list[i] += -self.step_size * db_list[i]
-
             
     def evaluate(self):
         inp = self.X
@@ -95,8 +114,8 @@ class Softmax(Classifier):
     def __init__(self, data):
         super(Softmax, self).__init__(data)
         ''' Parameters '''
-        self.W = 0.01 * np.random.randn(data.getDim(), data.getNumClasses())
-        self.b = np.zeros((1, data.getNumClasses()))
+        self.W = 0.01 * np.random.randn(data.D, data.K)
+        self.b = np.zeros((1, data.K))
     
     def train(self):
         for i in xrange(200):
@@ -127,7 +146,7 @@ class Softmax(Classifier):
     def evaluate(self):
         scores = np.dot(self.X, self.W) + self.b
         predicted_class = np.argmax(self.scores, axis=1)
-        result_str = 'training accuracy: %.2f' % np.mean(predicted_class == y)
+        result_str = 'training accuracy: %.2f' % np.mean(predicted_class == self.y)
         return result_str
 
 
