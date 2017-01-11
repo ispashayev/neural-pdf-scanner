@@ -20,12 +20,10 @@ def integrate_img(permno, name):
     pixels = np.matrix([ pixels[i*w:i*w+w] for i in range(h) ])
     for i in range(1,h):
         pixels[i,:] = pixels[i-1,:] + pixels[i,:]
-
     for i in range(1,w):
         pixels[:,i] = pixels[:,i-1] + pixels[:,i]
-
     return pixels
 
 
 if __name__ == '__main__':
-    print integrate_img(10000, 'ACF INDS INC')
+    print integrate_img('10000', 'ACF INDS INC')
