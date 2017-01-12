@@ -1,13 +1,23 @@
 '''
 Author: Iskandar Pashayev
+Purpose: Build gGeneralized classifiers for a data object
 
 Resources (partial code + theory) used from cs231n.github.io by Andrej Karpathy
 '''
 
 import numpy as np
 import matplotlib.pyplot as plt
-
 from utils import Data, Layers
+
+'''
+Debugging runtime warnings:
+1) overflow
+2) divide by zero
+3) invalid values
+'''
+import sys
+import warnings
+warnings.filterwarnings('error')
 
 '''
 Parent class for different types of classifiers.
@@ -31,7 +41,6 @@ class NeuralNetwork(Classifier):
     def __init__(self, data, layers):
         super(NeuralNetwork, self).__init__(data)
         ''' Parameters '''
-        # self.layers = [self.X] # input layer
         self.num_layers = layers.num_layers
         self.W_list, self.b_list = [], []
         for i in xrange(self.num_layers):
@@ -54,13 +63,22 @@ class NeuralNetwork(Classifier):
                 
             # Compute the loss: average cross-entropy and regularization
             ''' Can probably move this part into parent class '''
-            exp_scores = np.exp(scores)
+            try:
+                exp_scores = np.exp(scores) # applied element-wise
+            except RuntimeWarning as rw:
+                print 'Iteration', iteration, 'scores:'
+                print scores
+                sys.exit(rw)
+            
             probs = exp_scores / np.sum(exp_scores, axis=1, keepdims=True) # [N x K]
             correct_logprobs = -np.log(probs[range(self.num_examples),self.y])
             data_loss = np.sum(correct_logprobs) / self.num_examples
             reg_loss = sum([0.5*self.reg*np.sum(W*W) for W in self.W_list])
             loss = data_loss + reg_loss
-            if iteration % 1000 == 0: print "iteration %d: loss %f" % (iteration, loss)
+            if iteration % 1000 == 0:
+                print "iteration %d: loss %f" % (iteration, loss)
+                print 'scores:'
+                print scores
                 
             # Compute derivative of loss wrt scores
             dscores = probs
@@ -157,10 +175,10 @@ def classifyWithSoftmax(data):
     accuracy = softmax.evaluate()
     print accuracy
 
-def classifyWithNeuralNetwork(data):
+def classifyWithNeuralNetwork(data, num_neurons=10):
     # Training a Neural Network to classify the data
     layers = Layers(data.D, data.K)
-    layers.add_layer(100)
+    layers.add_layer(num_neurons)
     neural_network = NeuralNetwork(data, layers)
     neural_network.train()
     accuracy = neural_network.evaluate()
@@ -169,7 +187,8 @@ def classifyWithNeuralNetwork(data):
 if __name__ == '__main__':
     toy_2d_data = Data()
     toy_2d_data.construct_toy_data()
-    toy_2d_data.preprocess()
+    toy_2d_data.preprocess() # No actual need for preprocessing here.
+    
     '''
     # Visualizing the data
     X, y = toy_2d_data.X, toy_2d_data.y
@@ -178,4 +197,4 @@ if __name__ == '__main__':
     '''
 
     # classifyWithSoftmax(toy_2d_data)
-    classifyWithNeuralNetwork(toy_2d_data)
+    classifyWithNeuralNetwork(toy_2d_data, num_neurons=100)

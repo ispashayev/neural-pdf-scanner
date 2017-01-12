@@ -2,7 +2,9 @@
 
 '''
 Author: Iskandar Pashayev
-Purpose: Learn the weights for the labels to identify the company labels
+Purpose: Train a neural network to classify images into two classes:
+		- Contains the Consolidated Income Statement table
+		- Does not contain the Consolidated Income Statement table
 '''
 
 import os
@@ -88,12 +90,14 @@ if __name__ == '__main__':
             
             
             # A simple sanity check for types in the array
+            '''
             if 0 in X: # Could cause divide by zero exceptions during preprocessing
                 print 'X contains 0 values at'
                 print np.argwhere(X == 0)
                 print
             else:
                 print 'No 0 values detected in the data'
+            '''
             if np.isnan(X).any():
                 print 'X contains NaN values at'
                 print np.argwhere(np.isnan(X).any())
@@ -109,4 +113,4 @@ if __name__ == '__main__':
                 
             # Set up the neural network and classify the data
             num_neurons_hidden = 100
-            cl.classifyWithNeuralNetwork(data, num_neurons_hidden)
+            cl.classifyWithNeuralNetwork(data, num_neurons_hidden, True)

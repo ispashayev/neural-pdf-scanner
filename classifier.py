@@ -1,13 +1,23 @@
 '''
 Author: Iskandar Pashayev
+Purpose: Build gGeneralized classifiers for a data object
 
 Resources (partial code + theory) used from cs231n.github.io by Andrej Karpathy
 '''
 
 import numpy as np
 import matplotlib.pyplot as plt
-
 from utils import Data, Layers
+
+'''
+Debugging runtime warnings:
+1) overflow
+2) divide by zero
+3) invalid values
+'''
+import sys
+import warnings
+warnings.filterwarnings('error')
 
 '''
 Parent class for different types of classifiers.
@@ -31,14 +41,13 @@ class NeuralNetwork(Classifier):
     def __init__(self, data, layers):
         super(NeuralNetwork, self).__init__(data)
         ''' Parameters '''
-        # self.layers = [self.X] # input layer
         self.num_layers = layers.num_layers
         self.W_list, self.b_list = [], []
         for i in xrange(self.num_layers):
             self.W_list.append(0.01 * np.random.randn(layers.layers[i][0], layers.layers[i][1]))
             self.b_list.append(np.zeros((1, layers.layers[i][1])))
     
-    def train(self):
+    def train(self, large_scores=False):
         assert len(self.W_list) == len(self.b_list) # simple sanity check
         '''
         Forward pass: Evaluate class scores, e.g. W_2 * max(0,W_1*X+b), where
@@ -51,16 +60,30 @@ class NeuralNetwork(Classifier):
                 W_i, b_i, layer_i = self.W_list[i], self.b_list[i], layers[i]
                 layers.append(np.maximum(0, np.dot(layer_i, W_i) + b_i)) # ReLU activation
             scores = np.dot(layers[-1], self.W_list[-1]) + self.b_list[-1] # output layer
+            if large_scores: # then needs normalizing to prevent overflow during exponentiation
+                scores -= np.max(scores, axis=1, keepdims=True)
                 
             # Compute the loss: average cross-entropy and regularization
             ''' Can probably move this part into parent class '''
-            exp_scores = np.exp(scores)
+            exp_scores = np.exp(scores) # applied element-wise
             probs = exp_scores / np.sum(exp_scores, axis=1, keepdims=True) # [N x K]
-            correct_logprobs = -np.log(probs[range(self.num_examples),self.y])
+
+            ###############################################################################
+            # DEBUGGING correct_logprobs: getting a divide by zero exception on iteration 1
+            try:
+                correct_logprobs = -np.log(probs[range(self.num_examples),self.y])
+            except RuntimeWarning as rw:
+                print 'Iteration', iteration, 'probabilities:'
+                print probs[range(self.num_examples),self.y]
+                sys.exit(rw)
+            ###############################################################################
+                
             data_loss = np.sum(correct_logprobs) / self.num_examples
             reg_loss = sum([0.5*self.reg*np.sum(W*W) for W in self.W_list])
             loss = data_loss + reg_loss
-            if iteration % 1000 == 0: print "iteration %d: loss %f" % (iteration, loss)
+            if iteration % 1000 == 0:
+                print "iteration %d: loss %f" % (iteration, loss)
+                print probs[range(self.num_examples),self.y] # debugging here
                 
             # Compute derivative of loss wrt scores
             dscores = probs
@@ -157,19 +180,20 @@ def classifyWithSoftmax(data):
     accuracy = softmax.evaluate()
     print accuracy
 
-def classifyWithNeuralNetwork(data, num_neurons=10):
+def classifyWithNeuralNetwork(data, num_neurons=10, large_input_bool=False):
     # Training a Neural Network to classify the data
     layers = Layers(data.D, data.K)
     layers.add_layer(num_neurons)
     neural_network = NeuralNetwork(data, layers)
-    neural_network.train()
+    neural_network.train(large_input_bool)
     accuracy = neural_network.evaluate()
     print accuracy
     
 if __name__ == '__main__':
     toy_2d_data = Data()
     toy_2d_data.construct_toy_data()
-    toy_2d_data.preprocess()
+    toy_2d_data.preprocess() # No actual need for preprocessing here.
+    
     '''
     # Visualizing the data
     X, y = toy_2d_data.X, toy_2d_data.y
@@ -178,4 +202,4 @@ if __name__ == '__main__':
     '''
 
     # classifyWithSoftmax(toy_2d_data)
-    classifyWithNeuralNetwork(toy_2d_data)
+    classifyWithNeuralNetwork(toy_2d_data, num_neurons=100)

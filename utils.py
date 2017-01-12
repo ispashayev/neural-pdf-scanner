@@ -28,7 +28,7 @@ class Data(object):
             self.y[ix] = j
     # Left unimplemented for now
     def preprocess(self, mean_subtraction=True, normalization=False, pca=False, whitening=False):
-        assert self.X != None and self.y != None, 'Uninitialized data'
+        assert self.X is not None and self.y is not None, 'Uninitialized data'
         if mean_subtraction:
             self.X -= np.mean(self.X, axis=0)
         if normalization:
