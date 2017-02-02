@@ -24,22 +24,24 @@ Parent class for different types of classifiers.
 Subclasses implement train() and evaluate() methods.
 '''
 class Classifier(object):
-    def __init__(self, data):
+    def __init__(self, data, num_iterations):
         ''' Data '''
         self.X = data.X
         self.y = data.y
         self.N = data.N
         self.num_examples = self.X.shape[0]
+        print self.X.shape
         ''' Hyperparameters '''
         self.step_size = 1e-0
         self.reg = 1e-3 # regularization strength
+        self.num_iterations = num_iterations
 
 class NeuralNetwork(Classifier):
     '''
     We use a layers object to get the number of neurons per layer
     '''
-    def __init__(self, data, layers):
-        super(NeuralNetwork, self).__init__(data)
+    def __init__(self, data, layers, num_iterations=10000):
+        super(NeuralNetwork, self).__init__(data, num_iterations)
         ''' Parameters '''
         self.num_layers = layers.num_layers
         self.W_list, self.b_list = [], []
@@ -54,7 +56,8 @@ class NeuralNetwork(Classifier):
         max is an elementwise operation and
         0 is an [N x K] matrix of zeros.
         '''
-        for iteration in xrange(10000):
+        for iteration in xrange(self.num_iterations):
+            if iteration % 10 == 0: print 'Beginning iteration:', iteration
             layers = [self.X] # input layer
             for i in xrange(self.num_layers-1):
                 W_i, b_i, layer_i = self.W_list[i], self.b_list[i], layers[i]
@@ -65,25 +68,20 @@ class NeuralNetwork(Classifier):
                 
             # Compute the loss: average cross-entropy and regularization
             ''' Can probably move this part into parent class '''
-            exp_scores = np.exp(scores) # applied element-wise
+            exp_scores = np.exp(scores) # element-wise exponentiation
             probs = exp_scores / np.sum(exp_scores, axis=1, keepdims=True) # [N x K]
-
-            ###############################################################################
-            # DEBUGGING correct_logprobs: getting a divide by zero exception on iteration 1
             try:
                 correct_logprobs = -np.log(probs[range(self.num_examples),self.y])
             except RuntimeWarning as rw:
-                print 'Iteration', iteration, 'probabilities:'
-                print probs[range(self.num_examples),self.y]
+                print 'runtime warning on iteration', iteration
+                print 'class probabilities:'
+                print probs
                 sys.exit(rw)
-            ###############################################################################
-                
             data_loss = np.sum(correct_logprobs) / self.num_examples
             reg_loss = sum([0.5*self.reg*np.sum(W*W) for W in self.W_list])
             loss = data_loss + reg_loss
-            if iteration % 1000 == 0:
-                print "iteration %d: loss %f" % (iteration, loss)
-                print probs[range(self.num_examples),self.y] # debugging here
+            if iteration % 100 == 0: print "loss: %f" % loss
+
                 
             # Compute derivative of loss wrt scores
             dscores = probs
@@ -134,19 +132,21 @@ class NeuralNetwork(Classifier):
 
 
 class Softmax(Classifier):
-    def __init__(self, data):
-        super(Softmax, self).__init__(data)
+    def __init__(self, data, num_iterations=200):
+        super(Softmax, self).__init__(data, num_iterations)
         ''' Parameters '''
         self.W = 0.01 * np.random.randn(data.D, data.K)
         self.b = np.zeros((1, data.K))
     
-    def train(self):
-        for i in xrange(200):
+    def train(self, large_scores=False):
+        for i in xrange(self.num_iterations):
             # Compute the class scores for a linear classifier
-            self.scores = np.dot(self.X, self.W) + self.b
+            scores = np.dot(self.X, self.W) + self.b
+            if large_scores: # needs normalizing
+                scores -= np.max(scores, axis=1, keepdims=True)
 
             # Compute the loss: average cross-entropy loss and regularization
-            exp_scores = np.exp(self.scores) # unnormalized probabilities
+            exp_scores = np.exp(scores) # unnormalized probabilities
             probs = exp_scores / np.sum(exp_scores, axis=1, keepdims=True) # normalized
             correct_logprobs = -np.log(probs[range(self.num_examples),self.y])
             data_loss = np.sum(correct_logprobs) / self.num_examples
@@ -168,23 +168,25 @@ class Softmax(Classifier):
 
     def evaluate(self):
         scores = np.dot(self.X, self.W) + self.b
-        predicted_class = np.argmax(self.scores, axis=1)
+        predicted_class = np.argmax(scores, axis=1)
         result_str = 'training accuracy: %.2f' % np.mean(predicted_class == self.y)
         return result_str
 
 
-def classifyWithSoftmax(data):
+def classifyWithSoftmax(data, num_iterations=0, large_input_bool=False):
     # Training a Softmax Classifier to classify the data
-    softmax = Softmax(data)
-    softmax.train()
+    if num_iterations > 0: softmax = Softmax(data, num_iterations)
+    else: softmax = Softmax(data)
+    softmax.train(large_input_bool)
     accuracy = softmax.evaluate()
     print accuracy
 
-def classifyWithNeuralNetwork(data, num_neurons=10, large_input_bool=False):
+def classifyWithNeuralNetwork(data, num_neurons=10, num_iterations=0, large_input_bool=False):
     # Training a Neural Network to classify the data
     layers = Layers(data.D, data.K)
     layers.add_layer(num_neurons)
-    neural_network = NeuralNetwork(data, layers)
+    if num_iterations > 0: neural_network = NeuralNetwork(data, layers, num_iterations)
+    else: neural_network = NeuralNetwork(data, layers)
     neural_network.train(large_input_bool)
     accuracy = neural_network.evaluate()
     print accuracy

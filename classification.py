@@ -11,14 +11,34 @@ import os
 import numpy as np
 import random as r
 from PIL import Image
-from utils import Data # figure out how to call utils module from a subdirectory
-from classifier import Layers, NeuralNetwork # also want to have this in the subdirectory
-import classifier as cl
+from optparse import OptionParser
 
-kNumExamples = 10 # 19 false examples, 1 true example per PDF
+# Helpers
+from lib.utils import Data
+from lib.classifier import Layers, NeuralNetwork
+import lib.classifier as cl
+
+'''
+We only use 2 examples per PDF. Otherwise the false examples dominate the the true examples,
+resulting in machine precision issues when calculating log probabilities of the True example.
+'''
+kNumExamples = 2
 kNumClasses = 2 # only two classes: {is a table, is not a table}
+kNumNeuronsHidden = 1
+
+def parse_cmd_line():
+    '''
+    usage = 'usage: %prog [options]'
+    parser = OptionParser(usage=usage)
+    parser.add_option('-n','--neural-network',
+                      help='use a neural network to classify the data')
+    parser.add_option('-s','--softmax',
+                      help='use a softmax classifier to classify the data')
+    '''
+    return None
 
 if __name__ == '__main__':
+    args = parse_cmd_line();
     cwd_path = os.getcwd()
     with open('permnos.dat','r') as permnos:
         for line in permnos:
@@ -73,6 +93,7 @@ if __name__ == '__main__':
 
             for i in xrange(kNumExamples-1):
                 false_example_start = false_starts[i]
+                print 'False example start at y:', false_example_start
                 X[i] = pixels[false_example_start:false_example_start+dimensionality]
                 y[i] = 0
             X[-1] = pixels[start:start+dimensionality]
@@ -81,9 +102,8 @@ if __name__ == '__main__':
             '''
             VERY IMPORTANT NOTE:
             We do not normalize here because there is so little variation in the data. Most of the
-            pixels are white and so the standard deviation for each input tends to close to 0, and
-            for some features, is exactly 0. This leads to computational issues when applying the
-            normalization.
+            We DO normalize the class scores for each example during training by setting the 
+            large_input flag to True when calling classifyWithNeuralNetwork.
             '''
             data.set_data(X, y)
             data.preprocess()
@@ -112,5 +132,8 @@ if __name__ == '__main__':
                 print 'No Inf values detected in the data'
                 
             # Set up the neural network and classify the data
-            num_neurons_hidden = 100
-            cl.classifyWithNeuralNetwork(data, num_neurons_hidden, True)
+            # num_iterations = 1000
+            # cl.classifyWithNeuralNetwork(data, kNumNeuronsHidden, num_iterations, True)
+
+            # Classify the data with a softmax classifier
+            cl.classifyWithSoftmax(data, large_input_bool=True)
