@@ -181,10 +181,12 @@ def classifyWithSoftmax(data, num_iterations=0, large_input_bool=False):
     accuracy = softmax.evaluate()
     print accuracy
 
-def classifyWithNeuralNetwork(data, num_neurons=10, num_iterations=0, large_input_bool=False):
+def classifyWithNeuralNetwork(data, num_neurons, num_iterations=0, large_input_bool=False):
     # Training a Neural Network to classify the data
     layers = Layers(data.D, data.K)
-    layers.add_layer(num_neurons)
+    if len(num_neurons) == 0: num_neurons = 10 # default to a single hidden layer with 10 neurons
+    for hidden_set in num_neurons:
+        layers.add_layer(num_neurons)
     if num_iterations > 0: neural_network = NeuralNetwork(data, layers, num_iterations)
     else: neural_network = NeuralNetwork(data, layers)
     neural_network.train(large_input_bool)

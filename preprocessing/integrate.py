@@ -1,3 +1,5 @@
+# Obsolete (for now)
+
 '''
 Author: Iskandar Pashayev
 Purpose: For each pixel value in an image, calculate the sum of all the pixel values
