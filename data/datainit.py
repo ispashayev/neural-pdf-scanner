@@ -11,7 +11,7 @@ Purpose: Set up the PDF data so that we can use it with our machine learning alg
 import os
 import time
 import unirest
-from multiprocessing import Pool
+from multiprocessing import Pool, Lock
 
 # Authentication for pdf2jpg API - hidden from public
 import pdf2jpgauthentication as auth
@@ -25,6 +25,7 @@ class DataInitializer(object):
         self.pdf2jpg_endpt = 'https://pdf2jpg-pdf2jpg.p.mashape.com/convert_pdf_to_jpg.php'
         self.num_requests = 0
         self.pool = Pool(kNumWorkers)
+        self.lock = Lock()
         self.paths = []
         with open(self.permno_path, 'r') as permnos:
             for line in permnos:
@@ -53,8 +54,11 @@ class DataInitializer(object):
                 to done (at least not yet).
                 '''
                 while response['status'] != 'done':
+                    lock.acquire()
                     if self.num_requests >= kMaxChecks:
+                        lock.release()
                         raise Exception('Reached maximum number of conversion status checks.')
+                    lock.release()
                     time.sleep(30) # sleep for 30 seconds to give server time to run executable
                     response = unirest.get(self.pdf2jpg_endpt +
                                            '?id=' + response['id'] +
@@ -63,7 +67,9 @@ class DataInitializer(object):
                                                'X-Mashape-Key': auth.mashape_key(),
                                                'Accept':'application/json'
                                            })
+                    lock.acquire()
                     self.num_requests += 1
+                    lock.release()
                     
                 for i in range(1,len(response['pictures'])): # skip front page of manual
                     jpg_url = response['pictures'][i]
@@ -90,4 +96,4 @@ class DataInitializer(object):
 
 if __name__ == '__main__':
     data_initializer = DataInitializer()
-    data_initializer.conver_pdfs_to_jpg()
+    data_initializer.convert_pdfs_to_jpg()
