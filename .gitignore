@@ -1,2 +1,6 @@
 /data/pdf2jpgauthentication.py
 *.pdf
+*.jpg
+*.jpeg
+*.xlsx
+*.pyc
