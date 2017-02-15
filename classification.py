@@ -37,7 +37,9 @@ def load_data(path_to_permnos):
 	    datum = line.rstrip().split('\t') # read line from the permmos list
 	    permno, name, year = datum[:3] # identifiers
 	    start, offset = [int(token) for token in datum[3:]] # values
-	    assert len(datum) == 5, 'Invalid data format for %s (permno: %s, year: %s, )' % (name,permno,year)
+	    assert len(datum) == 5, 'Invalid data format for %s (permno: %s, year: %s, )' % (name,
+                                                                                             permno,
+                                                                                             year)
             
 	    # Load image in grayscale
 	    img = Image.open('data/' + permno + '/' + name + '.jpeg', 'r').convert('L')
@@ -47,15 +49,19 @@ def load_data(path_to_permnos):
 	    curr_pixels = list(img.getdata())
 	    assert curr_pixels.size % w == 0, 'Image imbalanced width-wise'
 	    pixels.append(curr_pixels)
+            
     return np.asarray(pixels)
+
+
 
 if __name__ == '__main__':
     parser = Parser()
-    num_false, config_file, output_file, verbose = parser.get_args()
+    parser.get_args() # parse command line arguments for config file, output file, & verbose flag
+    parser.read() # parse config file
 
-    pixels = load_data(os.getcwd() + '/data/permnos.dat')
+    pixels = load_data(parser.get_data_path())
 
-    # Set the data object we will train our neural network on
+    # Set the data object we will train our neural network on - stopped here
     dimensionality = offset*w # each class contains this number of pixels
     data = Data(num_false + 1, dimensionality, kNumClasses)
 
@@ -102,7 +108,7 @@ if __name__ == '__main__':
 
     '''
     VERY IMPORTANT NOTE:
-    We do not normalize here because there is so little variation in the data. Most of the
+    We do not normalize the features here because there is so little variation in the data.
     We DO normalize the class scores for each example during training by setting the
     large_input flag to True when calling classifyWithNeuralNetwork.
     '''
@@ -133,12 +139,7 @@ if __name__ == '__main__':
         print 'No Inf values detected in the data'
 
     # Set up the neural network and classify the data
-    num_iterations = 1000
-    hidden_neurons = []
-    with open(config_file,'r') as config:
-        for line in config:
-            hidden_neurons.append(int(line.rstrip()))
-    cl.classifyWithNeuralNetwork(data, hidden_neurons, num_iterations, True)
+    num_iterations = parser.get_num_iter()
+    hidden_layers = parser.get_hidden()
+    cl.classifyWithNeuralNetwork(data, hidden_layers, num_iterations, True)
     
-    # Classify the data with a softmax classifier
-    # cl.classifyWithSoftmax(data, large_input_bool=True)
